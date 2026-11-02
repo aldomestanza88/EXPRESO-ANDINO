@@ -1,0 +1,16 @@
+/* Transiciones generales */
+.transition {
+    transition: all 0.2s ease-in-out;
+  }
+  
+  /* Estado activo de las pestañas laterales */
+  .active-nav {
+    background-color: #2563eb !important; /* Blue-600 */
+    color: #ffffff !important;
+  }
+  
+  /* Efecto hover sobre los asientos del bus */
+  .seat-button:not(:disabled):hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  }

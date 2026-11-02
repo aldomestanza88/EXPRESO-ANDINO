@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Expreso Andino - Pasajes Interprovinciales y Experiencia del Pasajero</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .transition { transition: all 0.2s ease-in-out; }
+    
+    /* Estados de Asientos para el Cliente */
+    .seat-available {
+      background-color: #ecfdf5 !important;
+      color: #065f46 !important;
+      border: 1.5px solid #a7f3d0 !important;
+      cursor: pointer;
+    }
+    .seat-available:hover {
+      background-color: #d1fae5 !important;
+      transform: translateY(-2px);
+    }
+    .seat-sold {
+      background-color: #ef4444 !important;
+      color: #ffffff !important;
+      border: 1.5px solid #dc2626 !important;
+      cursor: not-allowed;
+      opacity: 0.85;
+    }
+    .seat-selected {
+      background-color: #2563eb !important;
+      color: #ffffff !important;
+      border: 2px solid #1d4ed8 !important;
+      transform: scale(1.05);
+      box-shadow: 0 4px 10px rgba(37, 99, 235, 0.4);
+    }
+
+    /* Distribución con Pasillo Central */
+    .bus-aisle-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) 28px repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .aisle-gap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #cbd5e1;
+      font-size: 10px;
+      font-weight: 700;
+      user-select: none;
+    }
+
+    /* Modo de Impresión para el Boleto Digital */
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #print-ticket-area, #print-ticket-area * {
+        visibility: visible;
+      }
+      #print-ticket-area {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: white;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col font-sans">
+
+  <!-- NAVBAR CLIENTE -->
+  <header class="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-30 shadow-md">
+    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white text-xl shadow-lg">
+          <i class="fa-solid fa-bus"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-lg leading-tight tracking-wide">EXPRESO ANDINO</h1>
+          <p class="text-[11px] text-blue-400 font-medium">Portal Oficial de Pasajes</p>
+        </div>
+      </div>
+      
+      <!-- Beneficios Visibles para el Pasajero -->
+      <div class="flex items-center gap-6 text-xs text-slate-300">
+        <span class="flex items-center gap-1.5">
+          <i class="fa-solid fa-shield-halved text-emerald-400"></i> Compra 100% Segura
+        </span>
+        <span class="hidden sm:flex items-center gap-1.5">
+          <i class="fa-solid fa-suitcase text-blue-400"></i> 20kg Equipaje Incluido
+        </span>
+        <span class="hidden md:flex items-center gap-1.5">
+          <i class="fa-solid fa-qrcode text-blue-400"></i> Embarque con Boleto QR
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- BANNER Y BUSCADOR DE PASAJES (HU06) -->
+  <section class="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white py-10 px-6 shadow-inner">
+    <div class="max-w-6xl mx-auto space-y-6">
+      <div class="text-center md:text-left">
+        <h2 class="text-2xl md:text-3xl font-extrabold tracking-tight">Encuentra y asegura tu viaje interprovincial</h2>
+        <p class="text-sm text-slate-300 mt-1">Consulta horarios, buses de 1 y 2 pisos, comodidades a bordo y elige tu asiento en tiempo real.</p>
+      </div>
+
+      <!-- Buscador -->
+      <form onsubmit="handleSearch(event)" class="bg-white text-slate-800 p-4 md:p-6 rounded-2xl shadow-2xl grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1.5 uppercase">Ciudad de Origen</label>
+          <div class="relative">
+            <i class="fa-solid fa-location-dot absolute left-3 top-3 text-slate-400 text-sm"></i>
+            <select id="search-origin" class="w-full bg-slate-50 border border-slate-300 rounded-xl pl-9 pr-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-600">
+              <option value="Lima">Lima (Todos los terminales)</option>
+              <option value="Huaraz">Huaraz</option>
+              <option value="Huancayo">Huancayo</option>
+              <option value="Cusco">Cusco</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1.5 uppercase">Ciudad de Destino</label>
+          <div class="relative">
+            <i class="fa-solid fa-location-crosshairs absolute left-3 top-3 text-slate-400 text-sm"></i>
+            <select id="search-destination" class="w-full bg-slate-50 border border-slate-300 rounded-xl pl-9 pr-3 py-2.5 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-600">
+              <option value="Huaraz">Huaraz</option>
+              <option value="Huancayo">Huancayo</option>
+              <option value="Cusco">Cusco (Imperial)</option>
+              <option value="Lima">Lima</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-600 mb-1.5 uppercase">Fecha de Viaje</label>
+          <div class="relative">
+            <i class="fa-regular fa-calendar-days absolute left-3 top-3 text-slate-400 text-sm"></i>
+            <input type="date" id="search-date" value="2026-10-15" class="w-full bg-slate-50 border border-slate-300 rounded-xl pl-9 pr-3 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-600">
+          </div>
+        </div>
+
+        <div>
+          <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-xl shadow-md transition flex items-center justify-center gap-2 text-sm">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            Buscar Pasajes
+          </button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- CONTENIDO PRINCIPAL: FILTROS DEL PASAJERO Y RESULTADOS -->
+  <main class="max-w-6xl mx-auto px-6 py-8 flex-1 w-full space-y-6">
+
+    <!-- FILTROS RÁPIDOS PARA EL CLIENTE -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-2 text-xs font-bold text-slate-600 uppercase">
+        <i class="fa-solid fa-sliders text-blue-600"></i> Filtrar Salidas:
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button onclick="applyFilter('all')" id="filter-all" class="filter-btn text-xs font-bold px-3 py-1.5 rounded-lg bg-blue-600 text-white shadow-sm transition">
+          Todos los viajes
+        </button>
+        <button onclick="applyFilter('2floors')" id="filter-2floors" class="filter-btn text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+          <i class="fa-solid fa-stairs mr-1 text-slate-400"></i> Solo 2 Pisos
+        </button>
+        <button onclick="applyFilter('1floor')" id="filter-1floor" class="filter-btn text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+          <i class="fa-solid fa-bus-simple mr-1 text-slate-400"></i> 1 Piso (Suite)
+        </button>
+        <button onclick="applyFilter('vip')" id="filter-vip" class="filter-btn text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
+          <i class="fa-solid fa-couch mr-1 text-slate-400"></i> Crucero VIP (160°)
+        </button>
+      </div>
+
+      <span id="trips-count-badge" class="text-xs bg-blue-50 text-blue-700 font-bold px-3 py-1 rounded-full border border-blue-200">
+        3 Salidas encontradas
+      </span>
+    </div>
+
+    <!-- Contenedor dinámico de viajes -->
+    <div id="trips-container" class="space-y-5"></div>
+  </main>
+
+  <!-- MODAL: MAPA DE ASIENTOS POR PISOS CON PASILLO (HU07, HU09, HU10) -->
+  <div id="seat-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white rounded-2xl w-full max-w-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      
+      <!-- Cabecera con Temporizador de Reserva de 10 min (HU10) -->
+      <div class="px-6 py-4 bg-slate-900 text-white flex justify-between items-center shrink-0">
+        <div>
+          <h4 class="font-bold text-base flex items-center gap-2">
+            <i class="fa-solid fa-chair text-emerald-400"></i>
+            Selección de Asientos
+          </h4>
+          <p id="modal-trip-summary" class="text-xs text-slate-300 mt-0.5">Lima ➔ Huaraz | Scania Marcopolo G7</p>
+        </div>
+        <div class="flex items-center gap-4">
+          <div class="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-2 text-amber-400 text-xs font-mono font-bold" title="Tiempo límite para completar la compra">
+            <i class="fa-solid fa-stopwatch animate-pulse"></i>
+            <span id="countdown-timer">10:00</span>
+          </div>
+          <button onclick="closeModal('seat-modal')" class="text-slate-400 hover:text-white text-xl">&times;</button>
+        </div>
+      </div>
+
+      <!-- Selector por Pisos y Mapa -->
+      <div class="p-6 overflow-y-auto flex-1 space-y-5">
+        
+        <!-- Pestañas Piso 1 y Piso 2 -->
+        <div class="flex border-b border-slate-200 gap-4" id="floor-tabs-container">
+          <button id="tab-floor-1" onclick="switchFloor(1)" class="pb-2.5 px-3 text-sm font-bold border-b-2 border-blue-600 text-blue-600 transition flex items-center gap-2">
+            <i class="fa-solid fa-layer-group"></i> Primer Piso (VIP 160°)
+          </button>
+          <button id="tab-floor-2" onclick="switchFloor(2)" class="pb-2.5 px-3 text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-700 transition flex items-center gap-2">
+            <i class="fa-solid fa-stairs"></i> Segundo Piso (Semi-Cama 140°)
+          </button>
+        </div>
+
+        <!-- Leyenda -->
+        <div class="flex items-center justify-center gap-6 text-xs text-slate-600 font-medium bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+          <div class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 bg-emerald-100 border border-emerald-400 rounded"></span> Libre</div>
+          <div class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 bg-rose-500 border border-rose-600 rounded"></span> Ocupado</div>
+          <div class="flex items-center gap-1.5"><span class="w-3.5 h-3.5 bg-blue-600 border border-blue-700 rounded"></span> Tu Selección</div>
+        </div>
+
+        <!-- Distribución del Bus con Pasillo Central -->
+        <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200 max-w-lg mx-auto">
+          <div class="text-center pb-3 border-b border-slate-200 mb-4 text-xs text-slate-400 font-bold uppercase tracking-wider flex items-center justify-center gap-2">
+            <i class="fa-solid fa-dharmachakra"></i> Cabina Delantera del Conductor
+          </div>
+          
+          <!-- Encabezado de columnas: Ventana / Pasillo / Ventana -->
+          <div class="bus-aisle-grid text-[10px] font-bold text-slate-400 text-center mb-2">
+            <span>Ventana</span>
+            <span>Pasillo</span>
+            <span></span>
+            <span>Pasillo</span>
+            <span>Ventana</span>
+          </div>
+
+          <div id="seat-layout-grid" class="bus-aisle-grid"></div>
+        </div>
+      </div>
+
+      <!-- Pie del Modal con Detalles de Asiento Seleccionado -->
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center shrink-0">
+        <div>
+          <p class="text-xs text-slate-500">Asiento Seleccionado:</p>
+          <span id="selected-seat-label" class="font-bold text-blue-600 text-base">Ninguno</span>
+          <span id="selected-seat-location" class="text-xs text-slate-500 ml-1"></span>
+          <span id="selected-seat-price" class="text-xs font-bold text-slate-700 ml-2"></span>
+        </div>
+        <button id="btn-proceed-passenger" disabled onclick="openPassengerModal()" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl shadow-md transition">
+          Ingresar Datos del Pasajero &rarr;
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: FORMULARIO DE PASAJERO Y VALIDACIÓN DE EDAD (HU08) -->
+  <div id="passenger-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+      <div class="px-6 py-4 bg-slate-900 text-white flex justify-between items-center shrink-0">
+        <h4 class="font-bold text-base flex items-center gap-2">
+          <i class="fa-solid fa-id-card text-blue-400"></i>
+          Información del Pasajero
+        </h4>
+        <button onclick="closeModal('passenger-modal')" class="text-slate-400 hover:text-white text-xl">&times;</button>
+      </div>
+
+      <form onsubmit="handleProceedToPayment(event)" class="p-6 space-y-4">
+        
+        <!-- Desglose de Tarifa y Resumen -->
+        <div class="bg-blue-50 border border-blue-200 text-blue-950 p-3.5 rounded-xl space-y-1 text-xs">
+          <div class="flex justify-between">
+            <span class="font-medium" id="passenger-seat-info">Asiento: N° 8 (Piso 1 - Ventana)</span>
+            <span id="p-base-price">S/ 70.00</span>
+          </div>
+          <div class="flex justify-between text-slate-500 text-[11px]">
+            <span>Tasa de Embarque y Seguro Obligatorio (SOAT):</span>
+            <span>S/ 5.00</span>
+          </div>
+          <div class="flex justify-between font-bold text-sm text-blue-900 pt-1 border-t border-blue-200">
+            <span>Total a Pagar:</span>
+            <span id="passenger-fare-info">S/ 75.00</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Tipo de Documento</label>
+            <select id="p-doctype" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600">
+              <option value="DNI">DNI</option>
+              <option value="CE">Carnet de Extranjería</option>
+              <option value="PASAPORTE">Pasaporte</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">N° Documento</label>
+            <input type="text" id="p-docnum" required placeholder="87654321" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Nombres y Apellidos Completos</label>
+          <input type="text" id="p-fullname" required placeholder="Ej. Juan Carlos Pérez Sánchez" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Fecha de Nacimiento</label>
+            <input type="date" id="p-birthdate" required onchange="validatePassengerAge()" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Edad Calculada</label>
+            <input type="text" id="p-age-display" readonly placeholder="--" class="w-full bg-slate-100 border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold text-slate-700 outline-none">
+          </div>
+        </div>
+
+        <!-- Sección de Apoderado Legal (RN09, RN10) -->
+        <div id="guardian-container" class="hidden p-3.5 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
+          <p class="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+            <i class="fa-solid fa-triangle-exclamation text-amber-600"></i>
+            Pasajero menor de 18 años: Registro obligatorio de Apoderado Legal (RN09, RN10)
+          </p>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[11px] font-bold text-amber-950 mb-0.5">DNI del Apoderado</label>
+              <input type="text" id="g-dni" placeholder="DNI del tutor" class="w-full border border-amber-300 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-amber-500">
+            </div>
+            <div>
+              <label class="block text-[11px] font-bold text-amber-950 mb-0.5">Nombres del Apoderado</label>
+              <input type="text" id="g-name" placeholder="Nombre completo" class="w-full border border-amber-300 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-1 focus:ring-amber-500">
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">Correo Electrónico (Recepción de Boleto QR)</label>
+          <input type="email" id="p-email" required placeholder="correo@ejemplo.com" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600">
+        </div>
+
+        <div class="pt-3 border-t border-slate-200 flex justify-end gap-3">
+          <button type="button" onclick="closeModal('passenger-modal')" class="px-4 py-2 border text-slate-600 text-sm font-semibold rounded-lg hover:bg-slate-50">Atrás</button>
+          <button type="submit" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg shadow-sm">Proceder al Pago &rarr;</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: CHECKOUT Y BOLETO DIGITAL CON QR (HU13, HU16) -->
+  <div id="checkout-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 overflow-hidden">
+      
+      <!-- Paso 1: Pasarela de Pago Cifrada -->
+      <div id="checkout-step-pay" class="p-6 space-y-4">
+        <div class="flex justify-between items-center border-b pb-3">
+          <h4 class="font-bold text-slate-800 text-base flex items-center gap-2">
+            <i class="fa-solid fa-credit-card text-blue-600"></i> Pasarela de Pago Cifrada
+          </h4>
+          <span class="text-xs bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded">SSL Seguro</span>
+        </div>
+        <div class="space-y-1 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <div class="flex justify-between"><span>Pasajero:</span> <b id="pay-passenger-name">--</b></div>
+          <div class="flex justify-between"><span>Asiento / Nivel:</span> <b id="pay-seat-details">--</b></div>
+          <div class="flex justify-between text-sm text-slate-900 font-bold pt-1 border-t"><span>Total a Pagar:</span> <b id="pay-amount-total">S/ 0.00</b></div>
+        </div>
+
+        <div class="space-y-3">
+          <label class="block text-xs font-bold text-slate-700 uppercase">Tarjeta de Débito / Crédito</label>
+          <input type="text" placeholder="4557 •••• •••• 9012" value="4557 8901 2345 9012" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none font-mono">
+          <div class="grid grid-cols-2 gap-3">
+            <input type="text" placeholder="MM/AA" value="08/28" class="border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none font-mono">
+            <input type="password" placeholder="CVV" value="123" class="border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none font-mono">
+          </div>
+        </div>
+
+        <button onclick="simulatePaymentSuccess()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg transition text-sm flex items-center justify-center gap-2">
+          <i class="fa-solid fa-lock"></i> Pagar y Emitir Boleto Digital
+        </button>
+      </div>
+
+      <!-- Paso 2: Boleto QR Generado e Imprimible (HU16) -->
+      <div id="checkout-step-ticket" class="hidden p-6 text-center space-y-4">
+        <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-2xl">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+        <div>
+          <h4 class="font-extrabold text-slate-800 text-lg">¡Tu Compra Fue Confirmada!</h4>
+          <p class="text-xs text-slate-500 mt-0.5">Boleto electrónico válido para abordar en terminal</p>
+        </div>
+
+        <!-- Área de Impresión del Boleto QR -->
+        <div id="print-ticket-area" class="bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl p-4 text-left space-y-3">
+          <div class="flex justify-between items-center border-b pb-2">
+            <span class="text-xs font-mono font-bold text-blue-600" id="ticket-code">TKT-84920</span>
+            <span class="text-xs font-bold text-slate-700">EXPRESO ANDINO S.A.C.</span>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <div class="text-xs space-y-0.5">
+              <p class="text-slate-400">Pasajero:</p>
+              <p class="font-bold text-slate-800" id="ticket-passenger">Juan Pérez</p>
+              <p class="text-slate-400 mt-1">Ruta y Salida:</p>
+              <p class="font-semibold text-slate-700" id="ticket-route">Lima ➔ Huaraz</p>
+              <p class="font-bold text-blue-600 text-sm mt-1" id="ticket-seat">Asiento 8 (Piso 1 - Ventana)</p>
+              <p class="text-[10px] text-slate-500">Equipaje: 20kg bodega + 5kg mano</p>
+            </div>
+            <!-- Código QR -->
+            <div class="w-24 h-24 bg-white border border-slate-200 rounded-xl p-1.5 flex flex-col items-center justify-center shadow-sm">
+              <i class="fa-solid fa-qrcode text-5xl text-slate-900"></i>
+              <span class="text-[8px] font-mono text-slate-500 mt-0.5">QR EMBARQUE</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Botones de Acción para el Pasajero -->
+        <div class="flex gap-2 no-print">
+          <button onclick="window.print()" class="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5">
+            <i class="fa-solid fa-download"></i> Descargar / Imprimir PDF
+          </button>
+          <button onclick="finishBooking()" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition">
+            Aceptar y Finalizar
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    /**
+     * EXPRESO ANDINO - LÓGICA DE NEGOCIO ORIENTADA 100% AL CLIENTE
+     */
+
+    const initialClientTrips = [
+      {
+        id: 'VIAJE-01',
+        origin: 'Lima',
+        destination: 'Huaraz',
+        terminalOrigin: 'Terminal Javier Prado (Av. Javier Prado Este 1100)',
+        terminalDest: 'Terminal Central Huaraz (Jr. Simón Bolívar 450)',
+        departureTime: '2026-10-15T08:00',
+        arrivalTime: '2026-10-15T16:00',
+        durationText: '8 hrs de viaje',
+        bus: {
+          plate: 'AND-501',
+          model: 'Scania Marcopolo G7',
+          serviceType: 'Crucero VIP',
+          floors: 2,
+          floor1Capacity: 12,
+          floor2Capacity: 28,
+          floor1Price: 75.00,
+          floor2Price: 60.00,
+          amenities: ['wifi', 'plug', 'snowflake', 'tv', 'restroom']
+        },
+        soldSeatsFloor1: [1, 2, 5],
+        soldSeatsFloor2: [15, 16, 20, 22],
+        isEnRoute: false
+      },
+      {
+        id: 'VIAJE-02',
+        origin: 'Lima',
+        destination: 'Huancayo',
+        terminalOrigin: 'Gran Terminal Plaza Norte (Independencia)',
+        terminalDest: 'Terminal Terrestre Huancayo (El Tambo)',
+        departureTime: '2026-10-15T14:00',
+        arrivalTime: '2026-10-15T21:00',
+        durationText: '7 hrs de viaje',
+        bus: {
+          plate: 'AND-702',
+          model: 'Volvo B430R',
+          serviceType: 'Doble Piso Mixto',
+          floors: 2,
+          floor1Capacity: 12,
+          floor2Capacity: 32,
+          floor1Price: 65.00,
+          floor2Price: 50.00,
+          amenities: ['plug', 'snowflake', 'restroom']
+        },
+        soldSeatsFloor1: [2, 3],
+        soldSeatsFloor2: [14, 18],
+        isEnRoute: false
+      },
+      {
+        id: 'VIAJE-03',
+        origin: 'Lima',
+        destination: 'Cusco',
+        terminalOrigin: 'Terminal Javier Prado (Av. Javier Prado Este 1100)',
+        terminalDest: 'Terminal Cusco Imperial (Vía Expresa)',
+        departureTime: '2026-10-15T06:00',
+        arrivalTime: '2026-10-16T03:00',
+        durationText: '21 hrs de viaje',
+        bus: {
+          plate: 'AND-890',
+          model: 'Mercedes-Benz O500',
+          serviceType: 'Crucero Suite',
+          floors: 1, // 1 Solo Piso
+          floor1Capacity: 40,
+          floor2Capacity: 0,
+          floor1Price: 120.00,
+          floor2Price: 0,
+          amenities: ['wifi', 'plug', 'snowflake', 'tv', 'restroom']
+        },
+        soldSeatsFloor1: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        soldSeatsFloor2: [],
+        isEnRoute: true // REGLA: BUS YA EN RUTA (COMPRA BLOQUEADA)
+      }
+    ];
+
+    let clientTrips = JSON.parse(localStorage.getItem('ea_client_trips')) || initialClientTrips;
+
+    // ESTADO
+    let selectedTrip = null;
+    let currentFloor = 1;
+    let selectedSeatNumber = null;
+    let selectedSeatFloor = 1;
+    let selectedSeatPrice = 0;
+    let selectedSeatLocation = 'Ventana';
+    let countdownInterval = null;
+
+    window.onload = function() {
+      renderClientTrips(clientTrips);
+    };
+
+    function saveState() {
+      localStorage.setItem('ea_client_trips', JSON.stringify(clientTrips));
+    }
+
+    // LISTADO DE VIAJES Y SALIDAS
+    function renderClientTrips(tripsList) {
+      const container = document.getElementById('trips-container');
+      document.getElementById('trips-count-badge').textContent = `${tripsList.length} Salidas encontradas`;
+
+      if (tripsList.length === 0) {
+        container.innerHTML = `
+          <div class="bg-white p-12 text-center rounded-2xl border border-slate-200">
+            <i class="fa-solid fa-bus-simple text-4xl text-slate-300 mb-3"></i>
+            <h4 class="font-bold text-slate-700 text-base">No se encontraron salidas con este filtro</h4>
+            <p class="text-xs text-slate-400 mt-1">Prueba seleccionando "Todos los viajes" o cambiando la fecha.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = tripsList.map(t => {
+        const bus = t.bus;
+        const freeFloor1 = bus.floor1Capacity - t.soldSeatsFloor1.length;
+        const freeFloor2 = bus.floors === 2 ? (bus.floor2Capacity - t.soldSeatsFloor2.length) : 0;
+        const totalFree = freeFloor1 + freeFloor2;
+
+        const depTime = t.departureTime.split('T')[1];
+        const arrTime = t.arrivalTime.split('T')[1];
+
+        return `
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-md transition">
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              
+              <!-- Información de Ruta y Horarios -->
+              <div class="space-y-2 flex-1">
+                <div class="flex items-center gap-3">
+                  <span class="text-xs font-bold uppercase bg-blue-50 text-blue-700 px-2.5 py-1 rounded-lg border border-blue-200">
+                    ${t.origin} ➔ ${t.destination}
+                  </span>
+                  <span class="text-xs font-semibold text-slate-500">
+                    <i class="fa-regular fa-clock mr-1"></i> ${t.durationText}
+                  </span>
+                </div>
+
+                <div class="flex items-center gap-4 mt-2">
+                  <div>
+                    <span class="text-xl font-black text-slate-900">${depTime}</span>
+                    <p class="text-[11px] text-slate-500 max-w-[150px] leading-tight mt-0.5">${t.terminalOrigin}</p>
+                  </div>
+                  <div class="flex-1 flex flex-col items-center max-w-[120px]">
+                    <span class="text-[10px] text-slate-400 font-bold mb-0.5">DIRECTO</span>
+                    <div class="w-full h-0.5 bg-slate-300 relative">
+                      <i class="fa-solid fa-bus text-[11px] text-blue-600 absolute -top-1.5 left-1/2 -translate-x-1/2 bg-white px-1"></i>
+                    </div>
+                  </div>
+                  <div>
+                    <span class="text-xl font-black text-slate-900">${arrTime}</span>
+                    <p class="text-[11px] text-slate-500 max-w-[150px] leading-tight mt-0.5">${t.terminalDest}</p>
+                  </div>
+                </div>
+
+                <!-- Amenidades a Bordo para el Cliente -->
+                <div class="flex items-center gap-2 pt-2 text-slate-400 text-xs">
+                  <span class="text-[11px] font-bold text-slate-500">Servicios:</span>
+                  <span title="WiFi a bordo" class="px-2 py-0.5 rounded bg-slate-50 border border-slate-200 text-slate-600"><i class="fa-solid fa-wifi text-[11px]"></i> WiFi</span>
+                  <span title="Tomacorrientes / USB" class="px-2 py-0.5 rounded bg-slate-50 border border-slate-200 text-slate-600"><i class="fa-solid fa-plug text-[11px]"></i> USB</span>
+                  <span title="Aire Acondicionado" class="px-2 py-0.5 rounded bg-slate-50 border border-slate-200 text-slate-600"><i class="fa-solid fa-snowflake text-[11px]"></i> A/C</span>
+                  <span title="Baño químico" class="px-2 py-0.5 rounded bg-slate-50 border border-slate-200 text-slate-600"><i class="fa-solid fa-restroom text-[11px]"></i> SS.HH</span>
+                </div>
+              </div>
+
+              <!-- Especificaciones del Bus, Pisos y Asientos -->
+              <div class="border-l-0 md:border-l md:pl-6 border-slate-200 space-y-2 flex-1">
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-sm text-slate-800">${bus.model}</span>
+                  <span class="text-[11px] bg-slate-100 text-slate-700 font-mono px-2 py-0.5 rounded font-semibold border">${bus.plate}</span>
+                </div>
+                <p class="text-xs text-blue-700 font-semibold">${bus.serviceType} • <b>${bus.floors === 2 ? 'Bus de 2 Pisos Panorámico' : 'Bus de 1 Piso Suite'}</b></p>
+
+                <!-- Desglose por Piso -->
+                <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs space-y-1">
+                  <div class="flex justify-between">
+                    <span class="text-slate-600"><i class="fa-solid fa-layer-group text-slate-400 mr-1"></i> Primer Piso (VIP):</span>
+                    <b class="text-emerald-700">${freeFloor1} libres (de ${bus.floor1Capacity})</b>
+                  </div>
+                  ${bus.floors === 2 ? `
+                    <div class="flex justify-between">
+                      <span class="text-slate-600"><i class="fa-solid fa-stairs text-slate-400 mr-1"></i> Segundo Piso (Semi-Cama):</span>
+                      <b class="text-emerald-700">${freeFloor2} libres (de${bus.floor2Capacity})</b>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+
+              <!-- Tarifa y Bloqueo de Viajes en Ruta -->
+              <div class="w-full md:w-48 text-right flex flex-col justify-between items-end shrink-0 border-t md:border-t-0 pt-4 md:pt-0">
+                <div>
+                  <span class="text-xs text-slate-400">Desde</span>
+                  <div class="text-2xl font-black text-slate-900">
+                    S/ ${parseFloat(bus.floors === 2 ? bus.floor2Price : bus.floor1Price).toFixed(2)}
+                  </div>
+                  <span class="text-[11px] text-slate-500">${totalFree} asientos libres</span>
+                </div>
+
+                <div class="mt-4 w-full">
+                  ${t.isEnRoute ? `
+                    <div class="text-center">
+                      <button disabled class="w-full py-2.5 px-3 bg-rose-50 border border-rose-300 text-rose-700 font-bold rounded-xl text-xs cursor-not-allowed">
+                        <i class="fa-solid fa-ban mr-1"></i> En ruta hacia destino
+                      </button>
+                      <span class="text-[10px] text-rose-600 font-semibold block mt-1">(Venta cerrada en web)</span>
+                    </div>
+                  ` : `
+                    <button onclick="startSeatSelection('${t.id}')" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs shadow-md transition flex items-center justify-center gap-1.5">
+                      <i class="fa-solid fa-chair"></i> Elegir Asientos
+                    </button>
+                  `}
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // FILTROS RÁPIDOS PARA EL CLIENTE
+    function applyFilter(filterType) {
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.className = "filter-btn text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition";
+      });
+      document.getElementById(`filter-${filterType}`).className = "filter-btn text-xs font-bold px-3 py-1.5 rounded-lg bg-blue-600 text-white shadow-sm transition";
+
+      if (filterType === 'all') {
+        renderClientTrips(clientTrips);
+      } else if (filterType === '2floors') {
+        renderClientTrips(clientTrips.filter(t => t.bus.floors === 2));
+      } else if (filterType === '1floor') {
+        renderClientTrips(clientTrips.filter(t => t.bus.floors === 1));
+      } else if (filterType === 'vip') {
+        renderClientTrips(clientTrips.filter(t => t.bus.serviceType.includes('VIP')));
+      }
+    }
+
+    // MAPA DE ASIENTOS CON DISTRIBUCIÓN DE PASILLO (HU07, HU09, HU10)
+    function startSeatSelection(tripId) {
+      selectedTrip = clientTrips.find(t => t.id === tripId);
+      if (!selectedTrip) return;
+
+      currentFloor = 1;
+      selectedSeatNumber = null;
+      selectedSeatPrice = 0;
+
+      document.getElementById('modal-trip-summary').textContent = 
+        `${selectedTrip.origin} ➔ ${selectedTrip.destination} | ${selectedTrip.bus.model} (${selectedTrip.bus.plate}) - ${selectedTrip.bus.floors === 2 ? '2 Pisos' : '1 Piso'}`;
+      
+      document.getElementById('selected-seat-label').textContent = 'Ninguno';
+      document.getElementById('selected-seat-location').textContent = '';
+      document.getElementById('selected-seat-price').textContent = '';
+      document.getElementById('btn-proceed-passenger').disabled = true;
+
+      const tabFloor2 = document.getElementById('tab-floor-2');
+      if (selectedTrip.bus.floors === 1) {
+        tabFloor2.classList.add('hidden');
+      } else {
+        tabFloor2.classList.remove('hidden');
+      }
+
+      startCountdown(10 * 60);
+      switchFloor(1);
+      document.getElementById('seat-modal').classList.remove('hidden');
+    }
+
+    function switchFloor(floorNum) {
+      currentFloor = floorNum;
+      const tab1 = document.getElementById('tab-floor-1');
+      const tab2 = document.getElementById('tab-floor-2');
+
+      if (floorNum === 1) {
+        tab1.className = "pb-2.5 px-3 text-sm font-bold border-b-2 border-blue-600 text-blue-600 transition flex items-center gap-2";
+        tab2.className = "pb-2.5 px-3 text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-700 transition flex items-center gap-2";
+      } else {
+        tab2.className = "pb-2.5 px-3 text-sm font-bold border-b-2 border-blue-600 text-blue-600 transition flex items-center gap-2";
+        tab1.className = "pb-2.5 px-3 text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-700 transition flex items-center gap-2";
+      }
+
+      renderSeatsForFloor(floorNum);
+    }
+
+    // RENDERIZADO DEL MAPA CON COLUMNAS: VENTANA (1,4) - PASILLO (2,3)
+    function renderSeatsForFloor(floorNum) {
+      const grid = document.getElementById('seat-layout-grid');
+      grid.innerHTML = '';
+
+      const bus = selectedTrip.bus;
+      const capacity = floorNum === 1 ? bus.floor1Capacity : bus.floor2Capacity;
+      const soldList = floorNum === 1 ? selectedTrip.soldSeatsFloor1 : selectedTrip.soldSeatsFloor2;
+      const price = floorNum === 1 ? bus.floor1Price : bus.floor2Price;
+
+      for (let i = 1; i <= capacity; i++) {
+        const isSold = soldList.includes(i);
+        const isSelected = (selectedSeatFloor === floorNum && selectedSeatNumber === i);
+
+        // Determinación de ubicación: Ventana o Pasillo
+        const colPos = (i - 1) % 4; // 0, 1, 2, 3
+        const locationType = (colPos === 0 || colPos === 3) ? 'Ventana' : 'Pasillo';
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('title', `Asiento ${i} • ${locationType}`);
+
+        if (isSold) {
+          btn.className = 'seat-sold p-2.5 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center';
+          btn.disabled = true;
+          btn.innerHTML = `<i class="fa-solid fa-couch mb-1 text-xs"></i>${i}`;
+        } else if (isSelected) {
+          btn.className = 'seat-selected p-2.5 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center';
+          btn.innerHTML = `<i class="fa-solid fa-couch mb-1 text-xs"></i>${i}`;
+          btn.onclick = () => selectSeat(i, floorNum, price, locationType);
+        } else {
+          btn.className = 'seat-available p-2.5 rounded-xl text-xs font-bold transition flex flex-col items-center justify-center';
+          btn.innerHTML = `<i class="fa-solid fa-couch mb-1 text-xs"></i>${i}`;
+          btn.onclick = () => selectSeat(i, floorNum, price, locationType);
+        }
+
+        grid.appendChild(btn);
+
+        // Insertar el pasillo central cada 2 asientos
+        if (i % 2 === 0 && i % 4 !== 0) {
+          const aisleDiv = document.createElement('div');
+          aisleDiv.className = 'aisle-gap';
+          aisleDiv.innerHTML = '<i class="fa-solid fa-arrows-up-down text-[9px] opacity-40"></i>';
+          grid.appendChild(aisleDiv);
+        }
+      }
+    }
+
+    function selectSeat(seatNum, floorNum, price, locationType) {
+      selectedSeatNumber = seatNum;
+      selectedSeatFloor = floorNum;
+      selectedSeatPrice = price;
+      selectedSeatLocation = locationType;
+
+      document.getElementById('selected-seat-label').textContent = `Asiento N° ${seatNum} (Piso ${floorNum})`;
+      document.getElementById('selected-seat-location').textContent = `• ${locationType}`;
+      document.getElementById('selected-seat-price').textContent = `• S/ ${price.toFixed(2)}`;
+      document.getElementById('btn-proceed-passenger').disabled = false;
+
+      renderSeatsForFloor(floorNum);
+    }
+
+    // CUENTA REGRESIVA DE 10 MINUTOS (HU10)
+    function startCountdown(durationSeconds) {
+      clearInterval(countdownInterval);
+      let timer = durationSeconds;
+      const display = document.getElementById('countdown-timer');
+
+      countdownInterval = setInterval(() => {
+        const minutes = Math.floor(timer / 60);
+        const seconds = timer % 60;
+        display.textContent = `${minutes < 10 ? '0' : ''}${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+
+        if (--timer < 0) {
+          clearInterval(countdownInterval);
+          alert('Tu tiempo de reserva de 10 minutos ha expirado. Por favor selecciona nuevamente.');
+          closeModal('seat-modal');
+        }
+      }, 1000);
+    }
+
+    // FORMULARIO DE PASAJERO Y EDAD (HU08)
+    function openPassengerModal() {
+      if (!selectedSeatNumber) return;
+      closeModal('seat-modal');
+
+      const boardingTax = 5.00;
+      const totalPrice = selectedSeatPrice + boardingTax;
+
+      document.getElementById('passenger-seat-info').textContent = 
+        `Asiento: N° ${selectedSeatNumber} (Piso ${selectedSeatFloor} - ${selectedSeatLocation})`;
+      document.getElementById('p-base-price').textContent = `S/ ${selectedSeatPrice.toFixed(2)}`;
+      document.getElementById('passenger-fare-info').textContent = `S/ ${totalPrice.toFixed(2)}`;
+
+      document.getElementById('passenger-modal').classList.remove('hidden');
+    }
+
+    function validatePassengerAge() {
+      const birthInput = document.getElementById('p-birthdate').value;
+      const ageDisplay = document.getElementById('p-age-display');
+      const guardianBox = document.getElementById('guardian-container');
+      const gDni = document.getElementById('g-dni');
+      const gName = document.getElementById('g-name');
+
+      if (!birthInput) return;
+
+      const birth = new Date(birthInput);
+      const today = new Date();
+      let age = today.getFullYear() - birth.getFullYear();
+      const m = today.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+        age--;
+      }
+
+      ageDisplay.value = `${age} años`;
+
+      if (age < 18) {
+        guardianBox.classList.remove('hidden');
+        gDni.required = true;
+        gName.required = true;
+      } else {
+        guardianBox.classList.add('hidden');
+        gDni.required = false;
+        gName.required = false;
+      }
+    }
+
+    // CHECKOUT Y EMISIÓN CON QR (HU13, HU16)
+    function handleProceedToPayment(e) {
+      e.preventDefault();
+      const pName = document.getElementById('p-fullname').value;
+      closeModal('passenger-modal');
+
+      const finalTotal = selectedSeatPrice + 5.00;
+
+      document.getElementById('pay-passenger-name').textContent = pName;
+      document.getElementById('pay-seat-details').textContent = `Asiento N° ${selectedSeatNumber} (Piso ${selectedSeatFloor} - ${selectedSeatLocation})`;
+      document.getElementById('pay-amount-total').textContent = `S/ ${finalTotal.toFixed(2)}`;
+
+      document.getElementById('checkout-step-pay').classList.remove('hidden');
+      document.getElementById('checkout-step-ticket').classList.add('hidden');
+      document.getElementById('checkout-modal').classList.remove('hidden');
+    }
+
+    function simulatePaymentSuccess() {
+      const pName = document.getElementById('p-fullname').value;
+
+      document.getElementById('ticket-code').textContent = `TKT-${Math.floor(10000 + Math.random() * 90000)}`;
+      document.getElementById('ticket-passenger').textContent = pName;
+      document.getElementById('ticket-route').textContent = `${selectedTrip.origin} ➔ ${selectedTrip.destination}`;
+      document.getElementById('ticket-seat').textContent = `Asiento ${selectedSeatNumber} (Piso ${selectedSeatFloor} - ${selectedSeatLocation})`;
+
+      if (selectedSeatFloor === 1) {
+        selectedTrip.soldSeatsFloor1.push(selectedSeatNumber);
+      } else {
+        selectedTrip.soldSeatsFloor2.push(selectedSeatNumber);
+      }
+      saveState();
+
+      clearInterval(countdownInterval);
+      document.getElementById('checkout-step-pay').classList.add('hidden');
+      document.getElementById('checkout-step-ticket').classList.remove('hidden');
+    }
+
+    function finishBooking() {
+      closeModal('checkout-modal');
+      renderClientTrips(clientTrips);
+    }
+
+    function handleSearch(e) {
+      e.preventDefault();
+      const orig = document.getElementById('search-origin').value;
+      const dest = document.getElementById('search-destination').value;
+      const filtered = clientTrips.filter(t => t.origin.includes(orig) || t.destination.includes(dest));
+      renderClientTrips(filtered.length > 0 ? filtered : clientTrips);
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+  </script>
+</body>
+</html>
